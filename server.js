@@ -5,6 +5,7 @@ var memoryCache = require('prerender-memory-cache');
 var server = prerender();
 
 server.use(prerender.sendPrerenderHeader());
+server.use(prerender.blockRedirectLoopAssets());
 if (process.env.PRERENDER_SKIP_STATIC_ASSETS !== 'false') {
   server.use(prerender.skipStaticAssets());
 }
