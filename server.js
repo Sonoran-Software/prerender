@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env node
+#!/usr/bin/env node
 var prerender = require('./lib');
 var memoryCache = require('prerender-memory-cache');
 
