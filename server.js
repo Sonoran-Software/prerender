@@ -9,7 +9,6 @@ server.use(prerender.blockRedirectLoopAssets());
 if (process.env.PRERENDER_SKIP_STATIC_ASSETS !== 'false') {
   server.use(prerender.skipStaticAssets());
 }
-server.use(prerender.browserForceRestart());
 // server.use(prerender.blockResources());
 server.use(prerender.addMetaTags());
 server.use(prerender.removeScriptTags());
