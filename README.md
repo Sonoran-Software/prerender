@@ -338,6 +338,7 @@ You can add the blacklisted domains to the plugin itself, or use the `BLACKLISTE
 
 Allows prerender requests for:
 
+- first-party domains matching `ALLOWED_HOSTNAMES`
 - first-party domains matching `ALLOWED_DOMAIN_SUFFIXES`
 - Cloudflare for SaaS custom hostnames that are currently `active` with `ssl.status=active`
 
@@ -346,6 +347,7 @@ The plugin keeps an in-memory allowlist refreshed on a background interval, so r
 Example configuration:
 
 ```bash
+export ALLOWED_HOSTNAMES=sonoransoftware.com,account.sonoransoftware.com,support.sonoransoftware.com,sonoran.store
 export ALLOWED_DOMAIN_SUFFIXES=.sonorancms.com,.sonorancad.com,.sonoranradio.com
 export CF_ZONE_IDS=zone_id_one,zone_id_two,zone_id_three
 export CF_API_TOKEN=your_read_only_token
