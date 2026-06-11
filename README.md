@@ -334,6 +334,31 @@ You can add the blacklisted domains to the plugin itself, or use the `BLACKLISTE
 
 `export BLACKLISTED_DOMAINS=yahoo.com,www.google.com`
 
+### cloudflareCustomHostnames
+
+Allows prerender requests for:
+
+- first-party domains matching `ALLOWED_DOMAIN_SUFFIXES`
+- Cloudflare for SaaS custom hostnames that are currently `active` with `ssl.status=active`
+
+The plugin keeps an in-memory allowlist refreshed on a background interval, so request-time checks do not call the Cloudflare API.
+
+Example configuration:
+
+```bash
+export ALLOWED_DOMAIN_SUFFIXES=.sonorancms.com,.sonorancad.com,.sonoranradio.com
+export CF_ZONE_IDS=zone_id_one,zone_id_two,zone_id_three
+export CF_API_TOKEN=your_read_only_token
+export CF_CUSTOM_HOSTNAMES_SYNC_INTERVAL_MS=300000
+```
+
+Optional settings:
+
+- `CF_CUSTOM_HOSTNAMES_TIMEOUT_MS` defaults to `10000`
+- `CF_API_BASE_URL` defaults to `https://api.cloudflare.com/client/v4`
+
+The recommended Cloudflare API token permission is `Zone -> SSL and Certificates -> Read`, scoped only to the zones listed in `CF_ZONE_IDS`.
+
 ### in-memory-cache
 
 Caches pages in memory. Available at [prerender-memory-cache](https://github.com/prerender/prerender-memory-cache)
