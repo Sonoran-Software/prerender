@@ -1,8 +1,50 @@
 const chrome = require('../../lib/browsers/chrome'),
   sinon = require('sinon'),
-  assert = require('assert');
+  assert = require('assert'),
+  fs = require('fs'),
+  os = require('os'),
+  path = require('path');
 
 describe('chrome', function () {
+  describe('getChromeFlags', function () {
+    let userDataDir;
+
+    beforeEach(function () {
+      userDataDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), 'prerender-chrome-test-'),
+      );
+    });
+
+    afterEach(function () {
+      fs.rmSync(userDataDir, { recursive: true, force: true });
+    });
+
+    it('resets and reuses a managed Chrome profile directory', function () {
+      const staleDirectory = path.join(userDataDir, 'scoped_dir_stale');
+      fs.mkdirSync(staleDirectory);
+      fs.writeFileSync(path.join(staleDirectory, 'cache'), 'stale');
+
+      const flags = chrome.getChromeFlags({
+        browserDebuggingPort: 9222,
+        chromeUserDataDir: userDataDir,
+      });
+
+      assert(flags.includes('--user-data-dir=' + userDataDir));
+      assert.deepStrictEqual(fs.readdirSync(userDataDir), []);
+    });
+
+    it('refuses to remove a Chrome profile outside the temp directory', function () {
+      assert.throws(
+        () =>
+          chrome.getChromeFlags({
+            browserDebuggingPort: 9222,
+            chromeUserDataDir: path.parse(os.tmpdir()).root,
+          }),
+        /must be inside the temp directory/,
+      );
+    });
+  });
+
   describe('loadUrlThenWaitForPageLoadEvent', function () {
     let tab;
     let sandbox;
