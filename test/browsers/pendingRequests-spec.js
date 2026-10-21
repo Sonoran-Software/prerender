@@ -9,14 +9,14 @@ describe('pending request diagnostics', function () {
     } };
     const result = chrome.pendingRequestDiagnostics(tab);
     assert.equal(result.count, 2);
-    assert.deepStrictEqual(result.requests[0], { origin: 'https://example.com', type: 'Document', responseStatus: 200, frame: undefined });
+    assert.deepStrictEqual(result.requests[0], { origin: 'https://example.com', type: 'Document', responseStatus: 200, document: 'unknown', frame: undefined });
     assert.equal(result.requests[1].origin, 'data:');
     assert(!JSON.stringify(result).includes('secret'));
   });
 
   it('distinguishes frame swaps from loading completion without clearing requests', function () {
     const handlers = {};
-    const Page = Object.fromEntries(['frameAttached', 'frameStartedLoading', 'frameStoppedLoading', 'frameDetached'].map(name => [name, callback => { handlers[name] = callback; }]));
+    const Page = Object.fromEntries(['frameAttached', 'frameStartedLoading', 'frameStoppedLoading', 'frameDetached', 'frameNavigated'].map(name => [name, callback => { handlers[name] = callback; }]));
     const tab = { prerender: { requests: { a: 'https://example.com/' }, numRequestsInFlight: 1,
       pageLoadInfo: { loadEventFiredMs: 123, entries: { a: { requestParams: { frameId: 'child', type: 'Document' } } } } } };
     chrome.trackFrameDiagnostics(tab, Page);
@@ -32,6 +32,26 @@ describe('pending request diagnostics', function () {
     assert.equal(tab.prerender.numRequestsInFlight, 1);
     for (let i = 0; i < 150; i++) handlers.frameStartedLoading({ frameId: String(i) });
     assert.equal(tab.prerender.frameDiagnostics.size, 100);
+  });
+
+  it('distinguishes replaced document requests without dropping pending work', function () {
+    const handlers = {};
+    const Page = Object.fromEntries(['frameAttached', 'frameStartedLoading', 'frameStoppedLoading', 'frameDetached', 'frameNavigated'].map(name => [name, callback => { handlers[name] = callback; }]));
+    const tab = { prerender: { requests: { old: 'https://example.com/old.js', current: 'https://example.com/new.js' }, numRequestsInFlight: 2,
+      pageLoadInfo: { entries: {
+        old: { requestParams: { frameId: 'main', loaderId: 'old', type: 'Script' } },
+        current: { requestParams: { frameId: 'main', loaderId: 'new', type: 'Script' } },
+      } } } };
+    chrome.trackFrameDiagnostics(tab, Page);
+    handlers.frameNavigated({ frame: { id: 'main', loaderId: 'old' } });
+    handlers.frameNavigated({ frame: { id: 'main', loaderId: 'new', url: 'https://example.com/?code=secret' } });
+    const result = chrome.pendingRequestDiagnostics(tab);
+    assert.deepStrictEqual(result.requests.map(request => request.document), ['previous', 'current']);
+    assert.equal(tab.prerender.numRequestsInFlight, 2);
+    assert.equal(Object.keys(tab.prerender.requests).length, 2);
+    assert(!JSON.stringify(result).includes('secret'));
+    for (let i = 0; i < 150; i++) handlers.frameNavigated({ frame: { id: String(i), loaderId: 'new' } });
+    assert.equal(tab.prerender.frameLoaderIds.size, 100);
   });
 
   it('reconciles only swapped child documents after their own load event', async function () {
