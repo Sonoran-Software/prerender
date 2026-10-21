@@ -12,6 +12,7 @@ if (
   server.use(prerender.cloudflareCustomHostnames());
 }
 server.use(prerender.sendPrerenderHeader());
+server.use(prerender.skipRenderMedia());
 server.use(prerender.blockRedirectLoopAssets());
 if (process.env.PRERENDER_SKIP_STATIC_ASSETS !== 'false') {
   server.use(prerender.skipStaticAssets());

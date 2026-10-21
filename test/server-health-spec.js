@@ -81,4 +81,16 @@ describe('server health and render outcomes', function () {
     assert.equal(server.healthState.consecutiveRenderErrors, 1);
     assert.equal(server.healthState.lastErrorReason, 'request timed out');
   });
+
+  it('does not let old browser failures restart the replacement browser', function () {
+    server.browserGeneration = 2;
+    const restart = sandbox.stub(server, 'restartBrowser');
+    for (let i = 0; i < 10; i++) {
+      server.recordRequestOutcome({ prerender: {
+        browserGeneration: 1, statusCode: 504, timedout: true, cancelled: true,
+      } });
+    }
+    assert.equal(server.healthState.consecutiveRenderErrors, 0);
+    assert.equal(restart.called, false);
+  });
 });
