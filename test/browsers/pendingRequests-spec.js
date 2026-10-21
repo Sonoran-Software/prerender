@@ -34,7 +34,7 @@ describe('pending request diagnostics', function () {
     assert.equal(tab.prerender.frameDiagnostics.size, 100);
   });
 
-  it('reconciles only swapped child documents after the page load event', function () {
+  it('reconciles only swapped child documents after their own load event', async function () {
     const tab = { prerender: { renderType: 'html', initialRequestId: 'main', numRequestsInFlight: 6,
       requests: Object.fromEntries(['main', 'swap', 'xhr', 'same', 'removed', 'no-response'].map(id => [id, 'https://example.com/'])),
       frameDiagnostics: new Map([['child', { isChild: true, detached: 'swap' }], ['removed', { isChild: true, detached: 'remove' }]]),
@@ -43,17 +43,46 @@ describe('pending request diagnostics', function () {
       requestParams: { type: id === 'xhr' ? 'XHR' : 'Document', frameId: id === 'same' ? 'same' : id === 'removed' ? 'removed' : 'child' },
       responseParams: id === 'no-response' ? undefined : { response: { status: 200 } },
     };
-    assert.equal(chrome.reconcileSwappedDocuments(tab), 0);
+    let loaded = false;
+    let released = 0;
+    tab.DOM = { getFrameOwner: async () => ({ backendNodeId: 1 }), resolveNode: async () => ({ object: { objectId: 'frame' } }) };
+    tab.Runtime = { callFunctionOn: async () => ({ result: { value: loaded } }), releaseObject: async () => { released++; } };
+    assert.equal(await chrome.reconcileSwappedDocuments(tab), 0);
     tab.prerender.pageLoadInfo.loadEventFiredMs = 123;
+    assert.equal(await chrome.reconcileSwappedDocuments(tab), 0, 'parent load does not complete the iframe');
+    loaded = true;
     tab.prerender.renderType = 'pdf';
-    assert.equal(chrome.reconcileSwappedDocuments(tab), 0);
+    assert.equal(await chrome.reconcileSwappedDocuments(tab), 0);
     tab.prerender.renderType = 'html';
-    assert.equal(chrome.reconcileSwappedDocuments(tab), 1);
+    assert.equal(await chrome.reconcileSwappedDocuments(tab), 1);
     assert(!tab.prerender.requests.swap);
     assert.equal(tab.prerender.numRequestsInFlight, 5);
-    assert.equal(chrome.reconcileSwappedDocuments(tab), 0);
+    assert.equal(await chrome.reconcileSwappedDocuments(tab), 0);
+    assert.equal(released, 3);
     assert.equal(tab.prerender.numRequestsInFlight, 5);
     assert.deepStrictEqual(Object.keys(tab.prerender.requests), ['main', 'xhr', 'same', 'removed', 'no-response']);
+  });
+
+  it('observes individual iframe loads and invalidates them on navigation', function () {
+    const vm = require('vm');
+    let listener, changed;
+    const window = { addEventListener: (name, callback) => { listener = callback; } };
+    const document = {};
+    class MutationObserver { constructor(callback) { changed = callback; } observe() {} }
+    vm.runInNewContext(chrome.iframeLoadTrackerSource, { window, document, MutationObserver });
+    const frame = { tagName: 'IFRAME', src: 'https://example.com/one' };
+    assert.equal(window.__prerenderFrameLoads.has(frame), false);
+    listener({ target: window });
+    assert.equal(window.__prerenderFrameLoads.has(frame), false);
+    listener({ target: frame });
+    assert.equal(window.__prerenderFrameLoads.get(frame), frame.src);
+    frame.src = 'https://example.com/two';
+    changed([{ target: frame }]);
+    assert.equal(window.__prerenderFrameLoads.has(frame), false);
+    listener({ target: frame });
+    assert.equal(window.__prerenderFrameLoads.get(frame), frame.src);
+    changed([{ target: frame }]); // Same-URL reload also invalidates completion.
+    assert.equal(window.__prerenderFrameLoads.has(frame), false);
   });
 
   it('bounds output while preserving the total pending count', function () {

@@ -6,6 +6,20 @@ const chrome = require('../../lib/browsers/chrome'),
   path = require('path');
 
 describe('chrome', function () {
+  it('keeps polling readiness during navigation only while the target remains alive', async function () {
+    chrome.options = { ...(chrome.options || {}), renderErrorStatusCode: 504 };
+    const tab = {
+      prerender: { renderType: 'html', requests: {}, domContentEventFired: true, errors: [], statusCode: 200 },
+      Runtime: { evaluate: async () => { throw new Error('Inspected target navigated or closed'); } },
+      Page: { getFrameTree: async () => ({ frameTree: { frame: { id: 'live' } } }) },
+    };
+    assert.equal(await chrome.checkIfPageIsDoneLoading(tab), false);
+    assert.equal(tab.prerender.statusCode, 200);
+    assert.deepStrictEqual(tab.prerender.errors, []);
+    tab.Page.getFrameTree = async () => { throw new Error('Target closed'); };
+    await assert.rejects(chrome.checkIfPageIsDoneLoading(tab));
+    assert(tab.prerender.errors.includes('UnableToEvaluateJavascript'));
+  });
   it('does not block a child that writes more than a pipe buffer', function (done) {
     this.timeout(6000);
     const { spawn } = require('node:child_process');
