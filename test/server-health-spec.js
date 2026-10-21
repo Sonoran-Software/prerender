@@ -32,6 +32,29 @@ describe('server health and render outcomes', function () {
     sandbox.restore();
   });
 
+  it('waits for a normal 20-second render before rejecting a queued request', async function () {
+    const previous = process.env.PRERENDER_QUEUE_TIMEOUT_MS;
+    delete process.env.PRERENDER_QUEUE_TIMEOUT_MS;
+    const clock = sandbox.useFakeTimers();
+    try {
+      server.init({});
+      const first = await server.renderQueue.acquire();
+      const second = await server.renderQueue.acquire();
+      const waiting = server.renderQueue.acquire().then(release => ({release}), error => ({error}));
+      await clock.tickAsync(21000);
+      first();
+      const result = await waiting;
+      assert.ifError(result.error);
+      assert.equal(server.renderQueue.active, 2);
+      result.release();
+      second();
+      assert.equal(server.renderQueue.active, 0);
+    } finally {
+      if (previous === undefined) delete process.env.PRERENDER_QUEUE_TIMEOUT_MS;
+      else process.env.PRERENDER_QUEUE_TIMEOUT_MS = previous;
+    }
+  });
+
   it('keeps liveness healthy when only page-level diagnostics are failing', async function () {
     server.isBrowserConnected = true;
     server.healthState.consecutiveRenderErrors = 9;
