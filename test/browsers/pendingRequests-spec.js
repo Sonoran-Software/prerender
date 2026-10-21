@@ -85,6 +85,23 @@ describe('pending request diagnostics', function () {
     assert.equal(window.__prerenderFrameLoads.has(frame), false);
   });
 
+  it('does not double-decrement a document completed while its owner is inspected', async function () {
+    let released = false;
+    const tab = { prerender: { renderType: 'html', requests: { a: 'https://example.com/' }, numRequestsInFlight: 1,
+      frameDiagnostics: new Map([['child', { isChild: true, detached: 'swap' }]]),
+      pageLoadInfo: { entries: { a: { requestParams: { type: 'Document', frameId: 'child' }, responseParams: { response: { status: 200 } } } } } },
+      DOM: { getFrameOwner: async () => ({ backendNodeId: 1 }), resolveNode: async () => ({ object: { objectId: 'owner' } }) },
+      Runtime: { callFunctionOn: async () => {
+        delete tab.prerender.requests.a;
+        tab.prerender.numRequestsInFlight--;
+        return { result: { value: true } };
+      }, releaseObject: async () => { released = true; } },
+    };
+    assert.equal(await chrome.reconcileSwappedDocuments(tab), 0);
+    assert.equal(tab.prerender.numRequestsInFlight, 0);
+    assert.equal(released, true);
+  });
+
   it('bounds output while preserving the total pending count', function () {
     const requests = Object.fromEntries(Array.from({ length: 20 }, (_, i) => [i, 'https://example.com/']));
     const result = chrome.pendingRequestDiagnostics({ prerender: { requests, pageLoadInfo: { entries: {} } } });
