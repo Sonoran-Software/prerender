@@ -4,6 +4,34 @@ const sinon = require('sinon');
 const plugin = require('../../lib/plugins/skipStaticAssets');
 
 describe('skipStaticAssets plugin', function () {
+  it('rejects observed filesystem and deployment probes while preserving page routes', function () {
+    const probes = [
+      '/proc/self/environ?raw?&', '/api/proc/self/environ',
+      '/@fs/var/run/secrets/kubernetes.io/serviceaccount/ca.crt?raw?&',
+      '/%40fs/etc/passwd', '/__vite_rsc_findSourceMapURL?filename=file:///proc/self/environ&environmentName=rsc',
+      '/userfiles/x?path=../../../../proc/self/environ',
+      '/*.auto.tfvars', '/key.pem', '/id_rsa', '/privatekey.key',
+      '/railway.toml', '/docker-compose.yml', '/docker-compose.dev.yml',
+      '/supabase/config.toml', '/config/env/aws_credentials.env',
+    ];
+    for (const target of probes) {
+      const send = sinon.spy();
+      const next = sinon.spy();
+      plugin.requestReceived({prerender: {url: 'https://community.sonorancms.com' + target}}, {send}, next);
+      assert(send.calledOnceWithExactly(404), target);
+      assert(!next.called, target);
+    }
+    for (const target of ['/blog/', '/news/', '/press/', '/site/', '/erlc',
+      '/compare/imperialcad', '/discovery/community/omega-roleplay-v3',
+      '/login?community=abc', '/userfiles/x?path=community/rules',
+      '/.well-known/oauth-authorization-server']) {
+      const send = sinon.spy();
+      const next = sinon.spy();
+      plugin.requestReceived({prerender: {url: 'https://community.sonorancms.com' + target}}, {send}, next);
+      assert(next.calledOnce, target);
+      assert(!send.called, target);
+    }
+  });
   it('rejects WordPress probes without rejecting community pages', function () {
     plugin.init();
     for (const path of ['/blog/?rest_route=/', '/press/wp-json/', '/wp-admin/', '/wp-login.php', '/xmlrpc.php']) {
