@@ -66,8 +66,13 @@ describe('pending request diagnostics', function () {
   it('observes individual iframe loads and invalidates them on navigation', function () {
     const vm = require('vm');
     let listener, changed;
-    const window = { addEventListener: (name, callback) => { listener = callback; } };
-    const document = {};
+    // Element load events never propagate to Window, even in capture phase.
+    const window = {};
+    const document = { addEventListener: (name, callback, capture) => {
+      assert.equal(name, 'load');
+      assert.equal(capture, true);
+      listener = callback;
+    } };
     class MutationObserver { constructor(callback) { changed = callback; } observe() {} }
     vm.runInNewContext(chrome.iframeLoadTrackerSource, { window, document, MutationObserver });
     const frame = { tagName: 'IFRAME', src: 'https://example.com/one' };
