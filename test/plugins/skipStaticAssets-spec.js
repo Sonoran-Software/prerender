@@ -4,6 +4,23 @@ const sinon = require('sinon');
 const plugin = require('../../lib/plugins/skipStaticAssets');
 
 describe('skipStaticAssets plugin', function () {
+  it('rejects WordPress probes without rejecting community pages', function () {
+    plugin.init();
+    for (const path of ['/blog/?rest_route=/', '/press/wp-json/', '/wp-admin/', '/wp-login.php', '/xmlrpc.php']) {
+      const send = sinon.spy();
+      const next = sinon.spy();
+      plugin.requestReceived({prerender: {url: 'https://community.sonorancms.com' + path}}, {send}, next);
+      assert(send.calledOnceWithExactly(404), path);
+      assert(!next.called, path);
+    }
+    for (const path of ['/blog/', '/news/', '/press/', '/erlc', '/compare/melonly', '/login?community=abc']) {
+      const send = sinon.spy();
+      const next = sinon.spy();
+      plugin.requestReceived({prerender: {url: 'https://community.sonorancms.com' + path}}, {send}, next);
+      assert(next.calledOnce, path);
+      assert(!send.called, path);
+    }
+  });
   beforeEach(function () {
     delete process.env.PRERENDER_ALLOW_HIDDEN_PATH_SEGMENTS;
     if (typeof plugin.init === 'function') {
