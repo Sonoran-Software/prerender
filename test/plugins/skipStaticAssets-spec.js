@@ -11,6 +11,9 @@ describe('skipStaticAssets plugin', function () {
       '/@fs/var/run/secrets/kubernetes.io/serviceaccount/ca.crt?raw?&',
       '/%40fs/etc/passwd', '/__vite_rsc_findSourceMapURL?filename=file:///proc/self/environ&environmentName=rsc',
       '/userfiles/x?path=../../../../proc/self/environ',
+      '/userfiles?path=../../../../.env',
+      '/userfiles?path=..%2F..%2F.env.production',
+      '/userfiles?path=..%5C..%5C.env',
       '/*.auto.tfvars', '/key.pem', '/id_rsa', '/privatekey.key',
       '/railway.toml', '/docker-compose.yml', '/docker-compose.dev.yml',
       '/supabase/config.toml', '/config/env/aws_credentials.env',
@@ -25,6 +28,7 @@ describe('skipStaticAssets plugin', function () {
     for (const target of ['/blog/', '/news/', '/press/', '/site/', '/erlc',
       '/compare/imperialcad', '/discovery/community/omega-roleplay-v3',
       '/login?community=abc', '/userfiles/x?path=community/rules',
+      '/news?search=.env', '/login?redirect=/community/dashboard',
       '/.well-known/oauth-authorization-server']) {
       const send = sinon.spy();
       const next = sinon.spy();
