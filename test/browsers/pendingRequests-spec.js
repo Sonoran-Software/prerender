@@ -2,6 +2,32 @@ const assert = require('assert');
 const chrome = require('../../lib/browsers/chrome');
 
 describe('pending request diagnostics', function () {
+  it('identifies public build assets and request age without changing pending work', function () {
+    const tab = { prerender: { requests: { a: 'https://user:secret@example.com/assets/js/CommunityDashboard.B_Z9-mPV.1.5.24-TGIRqgeE.js?token=secret#secret' },
+      numRequestsInFlight: 1, pageLoadInfo: { entries: { a: { requestParams: { type: 'Script', wallTime: Date.now() / 1000 - 12, initiator: { type: 'script', url: 'https://example.com/private' } } } } } } };
+    const result = chrome.pendingRequestDiagnostics(tab);
+    assert.equal(result.requests[0].staticAsset, '/assets/js/CommunityDashboard.B_Z9-mPV.1.5.24-TGIRqgeE.js');
+    assert.equal(result.requests[0].initiator, 'script');
+    assert(result.requests[0].ageMs >= 12000 && result.requests[0].ageMs < 12500);
+    assert(!JSON.stringify(result).includes('secret'));
+    assert(!JSON.stringify(result).includes('private'));
+    assert.equal(tab.prerender.numRequestsInFlight, 1);
+    assert.equal(Object.keys(tab.prerender.requests).length, 1);
+  });
+  it('omits arbitrary paths, non-assets and malformed timing or initiators', function () {
+    for (const [url, type] of [
+      ['https://example.com/private/token.js', 'Script'],
+      ['https://example.com/assets/js/nested/token.js', 'Script'],
+      ['https://example.com/assets/js/' + 'x'.repeat(180) + '.js', 'Script'],
+      ['https://example.com/assets/js/token.js', 'XHR'],
+      ['https://example.com/assets/js/%73ecret.js', 'Script'],
+    ]) {
+      const result = chrome.pendingRequestDiagnostics({ prerender: { requests: { a: url }, pageLoadInfo: { entries: { a: { requestParams: { type, wallTime: Infinity, initiator: { type: 'secret' } } } } } } });
+      assert.equal(result.requests[0].staticAsset, undefined);
+      assert.equal(result.requests[0].ageMs, undefined);
+      assert.equal(result.requests[0].initiator, undefined);
+    }
+  });
   it('retires only the replaced committed document in HTML after navigation', function () {
     const handlers = {};
     const Page = Object.fromEntries(['frameAttached','frameStartedLoading','frameStoppedLoading','frameDetached','frameNavigated'].map(name => [name, callback => { handlers[name] = callback; }]));
