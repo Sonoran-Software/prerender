@@ -7,6 +7,7 @@ describe('skipStaticAssets plugin', function () {
   it('rejects observed filesystem and deployment probes while preserving page routes', function () {
     const probes = [
       '/proc/self/environ?raw?&', '/api/proc/self/environ',
+      '/proc/self/cgroup', '/terraform.tfstate', '/terraform.tfstate.backup',
       '/@fs/var/run/secrets/kubernetes.io/serviceaccount/ca.crt?raw?&',
       '/%40fs/etc/passwd', '/__vite_rsc_findSourceMapURL?filename=file:///proc/self/environ&environmentName=rsc',
       '/userfiles/x?path=../../../../proc/self/environ',
