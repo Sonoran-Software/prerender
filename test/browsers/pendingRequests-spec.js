@@ -2,6 +2,32 @@ const assert = require('assert');
 const chrome = require('../../lib/browsers/chrome');
 
 describe('pending request diagnostics', function () {
+  it('retires only the replaced committed document in HTML after navigation', function () {
+    const handlers = {};
+    const Page = Object.fromEntries(['frameAttached','frameStartedLoading','frameStoppedLoading','frameDetached','frameNavigated'].map(name => [name, callback => { handlers[name] = callback; }]));
+    const entries = {
+      old: {requestParams:{frameId:'main',loaderId:'old',type:'Script'}},
+      current: {requestParams:{frameId:'main',loaderId:'new',type:'Script'}},
+      future: {requestParams:{frameId:'main',loaderId:'future',type:'Document'}},
+      child: {requestParams:{frameId:'child',loaderId:'old',type:'XHR'}},
+      unknown: {requestParams:{frameId:'main',type:'Fetch'}},
+    };
+    const tab={prerender:{renderType:'html',requests:Object.fromEntries(Object.keys(entries).map(id=>[id,'https://example.com/'])),numRequestsInFlight:5,pageLoadInfo:{entries},domContentEventFired:true,firstPrerenderReadyTime:1}};
+    chrome.trackFrameDiagnostics(tab,Page);
+    handlers.frameNavigated({frame:{id:'main',loaderId:'old'}});
+    assert.equal(tab.prerender.numRequestsInFlight,5,'first observed document does not prove replacement');
+    handlers.frameNavigated({frame:{id:'main',loaderId:'new'}});
+    assert.deepStrictEqual(Object.keys(tab.prerender.requests),['current','future','child','unknown']);
+    assert.equal(tab.prerender.numRequestsInFlight,4);
+    assert.equal(tab.prerender.domContentEventFired,false);
+    assert.equal(tab.prerender.firstPrerenderReadyTime,undefined);
+    assert(entries.old,'keep HAR diagnostic history');
+    handlers.frameNavigated({frame:{id:'main',loaderId:'new'}});
+    assert.equal(tab.prerender.numRequestsInFlight,4,'duplicate event does not subtract twice');
+    tab.prerender.renderType='har';
+    handlers.frameNavigated({frame:{id:'main',loaderId:'future'}});
+    assert.equal(tab.prerender.numRequestsInFlight,4,'leave non-HTML behavior unchanged');
+  });
   it('keeps resource types and status without credentials, paths or query values', function () {
     const tab = { prerender: {
       requests: { a: 'https://user:secret@example.com/private/token?code=secret#secret', b: 'data:text/plain,secret' },
