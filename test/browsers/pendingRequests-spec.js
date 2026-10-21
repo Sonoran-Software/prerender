@@ -9,9 +9,29 @@ describe('pending request diagnostics', function () {
     } };
     const result = chrome.pendingRequestDiagnostics(tab);
     assert.equal(result.count, 2);
-    assert.deepStrictEqual(result.requests[0], { origin: 'https://example.com', type: 'Document', responseStatus: 200 });
+    assert.deepStrictEqual(result.requests[0], { origin: 'https://example.com', type: 'Document', responseStatus: 200, frame: undefined });
     assert.equal(result.requests[1].origin, 'data:');
     assert(!JSON.stringify(result).includes('secret'));
+  });
+
+  it('distinguishes frame swaps from loading completion without clearing requests', function () {
+    const handlers = {};
+    const Page = Object.fromEntries(['frameStartedLoading', 'frameStoppedLoading', 'frameDetached'].map(name => [name, callback => { handlers[name] = callback; }]));
+    const tab = { prerender: { requests: { a: 'https://example.com/' }, numRequestsInFlight: 1,
+      pageLoadInfo: { loadEventFiredMs: 123, entries: { a: { requestParams: { frameId: 'child', type: 'Document' } } } } } };
+    chrome.trackFrameDiagnostics(tab, Page);
+    handlers.frameStartedLoading({ frameId: 'child' });
+    handlers.frameDetached({ frameId: 'child', reason: 'swap' });
+    let result = chrome.pendingRequestDiagnostics(tab);
+    assert.deepStrictEqual(result.requests[0].frame, { loading: true, detached: 'swap' });
+    handlers.frameStoppedLoading({ frameId: 'child' });
+    result = chrome.pendingRequestDiagnostics(tab);
+    assert.deepStrictEqual(result.requests[0].frame, { loading: false, detached: 'swap' });
+    assert.equal(result.pageLoadEventFired, true);
+    assert.equal(result.count, 1);
+    assert.equal(tab.prerender.numRequestsInFlight, 1);
+    for (let i = 0; i < 150; i++) handlers.frameStartedLoading({ frameId: String(i) });
+    assert.equal(tab.prerender.frameDiagnostics.size, 100);
   });
 
   it('bounds output while preserving the total pending count', function () {
